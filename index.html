@@ -17,6 +17,10 @@
   <!-- Lector de Cámara HTML5 QR / Código de Barras -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
   <style>
     :root {
       --primary: #d32f2f;
@@ -207,7 +211,6 @@
       gap: 6px;
     }
 
-    /* TARJETA DE PRODUCTO PRINCIPAL */
     .product-card {
       background: var(--card-bg);
       border-radius: 16px;
@@ -347,7 +350,6 @@
       border-radius: 3px;
     }
 
-    /* SECCIÓN DE SERIES Y SUGERENCIAS */
     .section-block {
       margin-top: 16px;
       background: rgba(30, 41, 59, 0.7);
@@ -436,7 +438,6 @@
       margin-top: 2px;
     }
 
-    /* TABLA PLANILLA GENERAL */
     .table-wrapper {
       overflow-x: auto;
       border-radius: 12px;
@@ -481,7 +482,6 @@
       padding-left: 4px;
     }
 
-    /* MODAL ESCÁNER */
     .modal-overlay {
       position: fixed;
       top:0; left:0; width:100%; height:100%;
@@ -538,14 +538,14 @@
 
   <div class="container">
 
-    <!-- BANNER EXCEL -->
+    <!-- BANNER DE CARGA DE EXCEL -->
     <div class="db-banner">
       <input type="file" id="excelInput" accept=".xlsx, .xls, .csv">
       <div class="db-info">
         <i class="fa-solid fa-file-excel" style="color:#22c55e; font-size:1.2rem;"></i>
-        <span>Base de Datos Excel</span>
+        <span>Actualizar Base Excel</span>
       </div>
-      <span id="dbStatusPill" class="badge-status">Cargar Excel</span>
+      <span id="dbStatusPill" class="badge-status">Cargando...</span>
     </div>
 
     <!-- VISTA 1: BUSCADOR REACTIVO + VOZ -->
@@ -596,7 +596,7 @@
 
           </div>
 
-          <!-- DESGLOSE DE TALLAS -->
+          <!-- DESGLOSE DE TALLAS (COLUMNA BE) -->
           <div class="sizes-section">
             <div class="sizes-header">
               <i class="fa-solid fa-layer-group"></i> DESGLOSE TALLA / STOCK (COL BE)
@@ -605,7 +605,7 @@
           </div>
         </div>
 
-        <!-- SECCIÓN 1: OTRAS SERIES DISPONIBLES (MISMO MODELO) -->
+        <!-- SECCIÓN 1: OTRAS SERIES DISPONIBLES (MISMO MODELO / DISEÑO) -->
         <div id="seriesWrapper" class="section-block" style="display:none;">
           <div class="section-title">
             <i class="fa-solid fa-sitemap" style="color:#a78bfa;"></i> Otras Series Disponibles (Mismo Diseño)
@@ -674,18 +674,103 @@
   </button>
 
   <script>
+    // =========================================================================
+    // === MÓDULO 1: VARIABLES GLOBALES Y CONFIGURACIÓN DE FIREBASE ===
+    // =========================================================================
     var globalDatabase = [];
     var html5QrcodeScanner = null;
 
+    // Configuración de Firebase conectada con tus credenciales
+    const firebaseConfig = {
+      apiKey: "AIzaSyDbNxpRujvKwEXn--mYvmtM00WCCI7O3Go",
+      authDomain: "stock-2f467.firebaseapp.com",
+      databaseURL: "https://stock-2f467-default-rtdb.firebaseio.com",
+      projectId: "stock-2f467",
+      storageBucket: "stock-2f467.firebasestorage.app",
+      messagingSenderId: "908775647010",
+      appId: "1:908775647010:web:4ffbc5c8602d301b5fe77b"
+    };
+
+    // Inicializar Firebase (compatibilidad web SDK v8)
+    var dbRef = null;
+    try {
+      firebase.initializeApp(firebaseConfig);
+      dbRef = firebase.database().ref('inventario_bata');
+    } catch(e) {
+      console.warn("Error inicializando Firebase:", e);
+    }
+
+
+    // =========================================================================
+    // === MÓDULO 2: GESTIÓN DE ALMACENAMIENTO (LOCALSTORAGE + FIREBASE) ===
+    // =========================================================================
+    
+    window.addEventListener('DOMContentLoaded', function() {
+      // 1. Carga inmediata local (sin esperar a internet)
+      var localData = localStorage.getItem('bata_inventario_local');
+      if (localData) {
+        try {
+          globalDatabase = JSON.parse(localData);
+          updateStatusPill(globalDatabase.length + " (Local)");
+        } catch(e) {}
+      } else {
+        updateStatusPill("Cargar Excel");
+      }
+
+      // 2. Sincronización en tiempo real desde la nube
+      if (dbRef) {
+        dbRef.on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            globalDatabase = data;
+            localStorage.setItem('bata_inventario_local', JSON.stringify(data));
+            updateStatusPill(globalDatabase.length + " (Nube)");
+            
+            if (document.getElementById('searchInput').value) autoSearch();
+            if (document.getElementById('viewPlanilla').style.display === 'block') renderFullTable(globalDatabase);
+          }
+        });
+      }
+    });
+
+    function updateStatusPill(text) {
+      var pill = document.getElementById('dbStatusPill');
+      pill.className = "badge-status ready";
+      pill.textContent = text;
+    }
+
+    function saveDatabaseToCloudAndLocal(parsedData) {
+      globalDatabase = parsedData;
+
+      // Guardar en la memoria del celular
+      localStorage.setItem('bata_inventario_local', JSON.stringify(parsedData));
+
+      // Subir a Firebase para que todos los demás celulares se actualicen
+      if (dbRef) {
+        dbRef.set(parsedData).then(() => {
+          updateStatusPill(parsedData.length + " (Nube)");
+          alert("¡Base de datos subida y actualizada con éxito!");
+        }).catch(err => {
+          updateStatusPill(parsedData.length + " (Local)");
+          console.error("Error al subir a Firebase:", err);
+        });
+      } else {
+        updateStatusPill(parsedData.length + " (Local)");
+      }
+    }
+
+
+    // =========================================================================
+    // === MÓDULO 3: FUNCIONES DE UTILIDAD Y BÚSQUEDA / IMÁGENES ===
+    // =========================================================================
+    
     function buildImageUrl(code) {
       return "https://intranet.emcomer.pe/INTER/TONW/FotosArticulos/" + code + "_1.JPG";
     }
 
-    // SANITIZAR Y EXTRAER CÓDIGO EAN13 -> 7 DÍGITOS DE BASE DE DATOS
     function normalizeCode(input) {
       if (!input) return "";
       var clean = String(input).replace(/\D/g, "");
-
       if (clean.length >= 13) {
         clean = clean.substring(1, 8);
       }
@@ -708,7 +793,11 @@
       }
     }
 
-    // ALGORITMO ETL EXACTO (AC/AD -> BE)
+
+    // =========================================================================
+    // === MÓDULO 4: PROCESAMIENTO Y TRANSFORMACIÓN DE DATOS EXCEL (ETL) ===
+    // =========================================================================
+
     function concatenarTallasSheet1(datos) {
       var numFilas = datos.length;
       if (numFilas === 0) return datos;
@@ -794,7 +883,6 @@
       return resultado;
     }
 
-    // CARGAR EXCEL
     document.getElementById('excelInput').addEventListener('change', function(e) {
       var file = e.target.files[0];
       if (!file) return;
@@ -807,16 +895,18 @@
 
         var matriz = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
         var matrizProcesada = concatenarTallasSheet1(matriz);
-        globalDatabase = extractColumns(matrizProcesada);
+        var finalData = extractColumns(matrizProcesada);
 
-        var pill = document.getElementById('dbStatusPill');
-        pill.className = "badge-status ready";
-        pill.textContent = globalDatabase.length + " Cargados";
+        saveDatabaseToCloudAndLocal(finalData);
       };
       reader.readAsArrayBuffer(file);
     });
 
-    // BÚSQUEDA DE OTRAS SERIES (MISMO MODELO / DIVERGENCIA EN 1.ER DÍGITO)
+
+    // =========================================================================
+    // === MÓDULO 5: LÓGICA DE BÚSQUEDA Y RELACIÓN DE PRODUCTOS ===
+    // =========================================================================
+
     function findSeriesProducts(targetItem) {
       if (!targetItem || !targetItem.articulo || targetItem.articulo.length !== 7) return [];
 
@@ -835,7 +925,6 @@
       return matches;
     }
 
-    // BÚSQUEDA DE MODELOS SIMILARES / VARIANTES DE COLOR (APPSHEET - DIVERGENCIA EN 4.º DÍGITO)
     function findSimilarProducts(targetItem, maxResults = 3) {
       if (!targetItem || !targetItem.articulo || targetItem.articulo.length < 5) return [];
 
@@ -866,7 +955,11 @@
       return matches;
     }
 
-    // RECONOCIMIENTO POR VOZ INTELIGENTE
+
+    // =========================================================================
+    // === MÓDULO 6: BÚSQUEDA POR VOZ Y RENDERIZADO REACTIVO ===
+    // =========================================================================
+
     function startVoiceRecognition() {
       var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
@@ -896,7 +989,6 @@
       recognition.onend = function() { micBtn.classList.remove('listening'); };
     }
 
-    // BÚSQUEDA REACTIVA EN BUSCADOR
     function autoSearch(queryOverride) {
       var rawQuery = queryOverride || document.getElementById('searchInput').value;
       var query = normalizeCode(rawQuery);
@@ -946,7 +1038,6 @@
           sizesDiv.innerHTML = '<span style="color:var(--text-muted); font-size:0.8rem;">Sin desglose</span>';
         }
 
-        // RENDERIZAR OTRAS SERIES (CON TALLA / CANTIDAD IGUAL A LAS VARIANTES)
         var seriesList = findSeriesProducts(found);
         var seriesWrapper = document.getElementById('seriesWrapper');
         var seriesContainer = document.getElementById('seriesContainer');
@@ -976,7 +1067,6 @@
           seriesWrapper.style.display = 'none';
         }
 
-        // RENDERIZAR MODELOS SIMILARES / VARIANTES DE COLOR
         var similars = findSimilarProducts(found, 3);
         var suggWrapper = document.getElementById('suggestionsWrapper');
         var suggContainer = document.getElementById('suggestionsContainer');
@@ -1008,7 +1098,11 @@
       }
     }
 
-    // BUSCADOR INTELIGENTE EN TABLA PLANILLA
+
+    // =========================================================================
+    // === MÓDULO 7: TABLA PLANILLA Y FILTRADO AVANZADO ===
+    // =========================================================================
+
     function filterTableSmart() {
       var input = document.getElementById('tableFilter').value.trim().toLowerCase();
       if (!input) {
@@ -1017,7 +1111,6 @@
       }
 
       var filtered = globalDatabase.filter(item => {
-        // 1. Filtros avanzados de stock (stock>5, stock<3, stock=10)
         if (input.startsWith('stock')) {
           var expr = input.replace('stock', '').trim();
           if (expr.startsWith('>')) return item.stock > parseFloat(expr.substring(1));
@@ -1025,20 +1118,17 @@
           if (expr.startsWith('=')) return item.stock === parseFloat(expr.substring(1));
         }
 
-        // 2. Filtros de Precio (precio<100, precio>50)
         if (input.startsWith('precio')) {
           var expr = input.replace('precio', '').trim();
           if (expr.startsWith('>')) return item.pPlanilla > parseFloat(expr.substring(1));
           if (expr.startsWith('<')) return item.pPlanilla < parseFloat(expr.substring(1));
         }
 
-        // 3. Búsqueda por Talla (talla:41)
         if (input.startsWith('talla:')) {
           var sizeTarget = input.replace('talla:', '').trim();
           return item.tallaCantidad.toLowerCase().includes(sizeTarget + '/');
         }
 
-        // 4. Búsqueda por texto general
         var matchArt = item.articulo.toLowerCase().includes(input);
         var matchCat = item.categoria.toLowerCase().includes(input);
         var matchTalla = item.tallaCantidad.toLowerCase().includes(input + '/');
@@ -1067,7 +1157,11 @@
       });
     }
 
-    // ESCÁNER QR Y CÓDIGO DE BARRAS EAN13
+
+    // =========================================================================
+    // === MÓDULO 8: CÁMARA ESCÁNER QR / CÓDIGO DE BARRAS ===
+    // =========================================================================
+
     function openScanner() {
       document.getElementById('scannerModal').style.display = 'flex';
       html5QrcodeScanner = new Html5Qrcode("reader");
