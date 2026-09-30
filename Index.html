@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BATA 1 - Consulta de Inventario y Series</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- SheetJS & FontAwesome -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Lector de Cámara HTML5 QR / Código de Barras -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    :root {
+      --primary: #d32f2f;
+      --primary-dark: #9a0007;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --accent: #22c55e;
+      --warning: #eab308;
+      --purple-badge: #8b5cf6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    header {
+      background: #0f172a;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 12px 16px;
+    }
+
+    .header-container {
+      max-width: 850px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      font-weight: 900;
+      font-size: 1.3rem;
+      color: var(--primary);
+      letter-spacing: 0.5px;
+    }
+
+    .nav-pills {
+      display: flex;
+      background: #1e293b;
+      padding: 3px;
+      border-radius: 10px;
+      gap: 2px;
+    }
+
+    .nav-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .nav-btn.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .container {
+      max-width: 850px;
+      margin: 12px auto;
+      padding: 0 12px;
+    }
+
+    .db-banner {
+      background: var(--card-bg);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      position: relative;
+    }
+
+    .db-banner input[type="file"] {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .db-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .badge-status {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #334155;
+      color: var(--text-muted);
+    }
+
+    .badge-status.ready {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent);
+    }
+
+    .search-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .search-input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    .search-input-wrapper i.fa-magnifying-glass {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 42px 12px 42px;
+      font-size: 0.95rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      outline: none;
+      background: var(--card-bg);
+      color: white;
+      font-weight: 600;
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-mic {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+    }
+
+    .btn-mic.listening {
+      color: var(--primary);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: translateY(-50%) scale(1); }
+      50% { transform: translateY(-50%) scale(1.2); }
+      100% { transform: translateY(-50%) scale(1); }
+    }
+
+    .btn-cam {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 0 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* TARJETA DE PRODUCTO PRINCIPAL */
+    .product-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 14px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      margin-bottom: 16px;
+    }
+
+    .product-hero-layout {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .product-image-box {
+      width: auto;
+      max-width: 130px;
+      max-height: 130px;
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .product-image-box img {
+      max-width: 100%;
+      max-height: 110px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .product-main-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tags-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .tag-cat { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+    .tag-cal { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+
+    .product-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .metric-card {
+      background: #0f172a;
+      padding: 6px 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .metric-card small {
+      display: block;
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .metric-card strong {
+      font-size: 0.9rem;
+      font-weight: 800;
+    }
+
+    .sizes-section {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .sizes-header {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sizes-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .size-chip {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 0.78rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .size-chip span {
+      background: var(--primary);
+      color: white;
+      font-size: 0.65rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    /* SECCIÓN DE SERIES Y SUGERENCIAS */
+    .section-block {
+      margin-top: 16px;
+      background: rgba(30, 41, 59, 0.7);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 12px;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+    }
+
+    .item-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .item-card:hover {
+      border-color: var(--purple-badge);
+      transform: translateY(-2px);
+    }
+
+    .item-img-box {
+      width: 55px;
+      height: 55px;
+      background: #ffffff;
+      border-radius: 6px;
+      padding: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .item-img-box img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .item-info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .item-code {
+      font-weight: 800;
+      font-size: 0.85rem;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .item-price {
+      font-size: 0.75rem;
+      color: #38bdf8;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .item-subtext {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    /* TABLA PLANILLA GENERAL */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    th {
+      background: #0f172a;
+      padding: 10px;
+      text-align: left;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .img-thumb {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      border-radius: 6px;
+      background: #ffffff;
+      padding: 2px;
+    }
+
+    .search-hint {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: -10px;
+      margin-bottom: 12px;
+      padding-left: 4px;
+    }
+
+    /* MODAL ESCÁNER */
+    .modal-overlay {
+      position: fixed;
+      top:0; left:0; width:100%; height:100%;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      width: 90%;
+      max-width: 400px;
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+    }
+
+    #reader { width: 100%; border-radius: 12px; overflow: hidden; }
+
+    .fab-scan {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 14px 22px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      box-shadow: 0 10px 20px rgba(211,47,47,0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 90;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-container">
+      <div class="brand">BATA 1</div>
+      <div class="nav-pills">
+        <button class="nav-btn active" id="tabBuscador" onclick="switchTab('buscador')">Buscador</button>
+        <button class="nav-btn" id="tabPlanilla" onclick="switchTab('planilla')">Planilla</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- BANNER EXCEL -->
+    <div class="db-banner">
+      <input type="file" id="excelInput" accept=".xlsx, .xls, .csv">
+      <div class="db-info">
+        <i class="fa-solid fa-file-excel" style="color:#22c55e; font-size:1.2rem;"></i>
+        <span>Base de Datos Excel</span>
+      </div>
+      <span id="dbStatusPill" class="badge-status">Cargar Excel</span>
+    </div>
+
+    <!-- VISTA 1: BUSCADOR REACTIVO + VOZ -->
+    <div id="viewBuscador">
+      <div class="search-box">
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="searchInput" class="search-input" placeholder="Ingresa código (ej. 1011301) o dicta..." oninput="autoSearch()">
+          <button class="btn-mic" id="btnMic" onclick="startVoiceRecognition()" title="Dictar por voz">
+            <i class="fa-solid fa-microphone"></i>
+          </button>
+        </div>
+        <button class="btn-cam" onclick="openScanner()"><i class="fa-solid fa-camera"></i> QR</button>
+      </div>
+
+      <!-- FICHA DE PRODUCTO PRINCIPAL -->
+      <div id="productResult" style="display:none;">
+        <div class="product-card">
+          <div class="product-hero-layout">
+            
+            <div class="product-image-box">
+              <img id="pImg" src="" alt="Calzado" onerror="this.src='https://via.placeholder.com/130x110/ffffff/94a3b8?text=Sin+Foto';">
+            </div>
+
+            <div class="product-main-info">
+              <div class="tags-row">
+                <span id="pCategory" class="tag tag-cat">CATEGORÍA</span>
+                <span id="pQuality" class="tag tag-cal">CALIDAD 1</span>
+              </div>
+
+              <h1 id="pCode" class="product-title">Artículo 000000</h1>
+
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <small>Stock</small>
+                  <strong id="pStock" style="color:var(--accent);">0</strong>
+                </div>
+                <div class="metric-card">
+                  <small>Precio</small>
+                  <strong id="pPrice" style="color:#38bdf8;">S/ 0.00</strong>
+                </div>
+                <div class="metric-card">
+                  <small>Venta</small>
+                  <strong id="pSales">0</strong>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- DESGLOSE DE TALLAS -->
+          <div class="sizes-section">
+            <div class="sizes-header">
+              <i class="fa-solid fa-layer-group"></i> DESGLOSE TALLA / STOCK (COL BE)
+            </div>
+            <div class="sizes-grid" id="pSizesContainer"></div>
+          </div>
+        </div>
+
+        <!-- SECCIÓN 1: OTRAS SERIES DISPONIBLES (MISMO MODELO) -->
+        <div id="seriesWrapper" class="section-block" style="display:none;">
+          <div class="section-title">
+            <i class="fa-solid fa-sitemap" style="color:#a78bfa;"></i> Otras Series Disponibles (Mismo Diseño)
+          </div>
+          <div class="cards-grid" id="seriesContainer"></div>
+        </div>
+
+        <!-- SECCIÓN 2: MODELOS SIMILARES / VARIANTES DE COLOR -->
+        <div id="suggestionsWrapper" class="section-block" style="display:none;">
+          <div class="section-title">
+            <i class="fa-solid fa-boxes-stacked" style="color:var(--primary);"></i> Variantes de Color / Modelos Similares
+          </div>
+          <div class="cards-grid" id="suggestionsContainer"></div>
+        </div>
+
+      </div>
+
+      <div id="emptySearchState" style="text-align:center; padding: 50px 20px; color:var(--text-muted);">
+        <i class="fa-solid fa-barcode fa-3x" style="margin-bottom:12px; opacity:0.4;"></i>
+        <p style="font-weight:600;">Ingresa un código, dicta por voz o escanea.</p>
+      </div>
+    </div>
+
+    <!-- VISTA 2: PLANILLA GENERAL -->
+    <div id="viewPlanilla" style="display:none;">
+      <div style="margin-bottom:6px;">
+        <input type="text" id="tableFilter" class="search-input" placeholder="Buscar por artículo, talla (41), stock (>5), precio (<150)..." onkeyup="filterTableSmart()">
+      </div>
+      <div class="search-hint">
+        Ejemplos: <code>stock>5</code> | <code>precio<100</code> | <code>talla:42</code> | <code>Zapatilla</code>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="fullTable">
+          <thead>
+            <tr>
+              <th>Imagen</th>
+              <th>Artículo</th>
+              <th>Stock</th>
+              <th>P. Planilla</th>
+              <th>Tallas / Cant. (BE)</th>
+              <th>Categoría</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL ESCÁNER -->
+  <div class="modal-overlay" id="scannerModal">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="font-size:1rem; font-weight:800;"><i class="fa-solid fa-qrcode"></i> Escanear Código EAN-13 / QR</h3>
+        <button onclick="closeScanner()" style="border:none; background:transparent; color:white; font-size:1.2rem; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="reader"></div>
+    </div>
+  </div>
+
+  <!-- BOTÓN ESCÁNER FLOTANTE -->
+  <button class="fab-scan" onclick="openScanner()">
+    <i class="fa-solid fa-camera"></i> ESCANEAR
+  </button>
+
+  <script>
+    var globalDatabase = [];
+    var html5QrcodeScanner = null;
+
+    function buildImageUrl(code) {
+      return "https://intranet.emcomer.pe/INTER/TONW/FotosArticulos/" + code + "_1.JPG";
+    }
+
+    // SANITIZAR Y EXTRAER CÓDIGO EAN13 -> 7 DÍGITOS DE BASE DE DATOS
+    function normalizeCode(input) {
+      if (!input) return "";
+      var clean = String(input).replace(/\D/g, "");
+
+      if (clean.length >= 13) {
+        clean = clean.substring(1, 8);
+      }
+      return clean;
+    }
+
+    function switchTab(tab) {
+      document.getElementById('tabBuscador').classList.remove('active');
+      document.getElementById('tabPlanilla').classList.remove('active');
+
+      if(tab === 'buscador') {
+        document.getElementById('viewBuscador').style.display = 'block';
+        document.getElementById('viewPlanilla').style.display = 'none';
+        document.getElementById('tabBuscador').classList.add('active');
+      } else {
+        document.getElementById('viewBuscador').style.display = 'none';
+        document.getElementById('viewPlanilla').style.display = 'block';
+        document.getElementById('tabPlanilla').classList.add('active');
+        renderFullTable(globalDatabase);
+      }
+    }
+
+    // ALGORITMO ETL EXACTO (AC/AD -> BE)
+    function concatenarTallasSheet1(datos) {
+      var numFilas = datos.length;
+      if (numFilas === 0) return datos;
+
+      var numColumnas = 0;
+      for (var r = 0; r < numFilas; r++) {
+        if (datos[r] && datos[r].length > numColumnas) numColumnas = datos[r].length;
+      }
+
+      var columnaTallas = 29, columnaCantidades = 30, columnaResultados = 57;
+      var resultados = [];
+
+      for (var i = 0; i < numFilas; i++) {
+        if (!datos[i]) continue;
+        var idTalla = datos[i][columnaTallas - 1];
+        if (!idTalla || String(idTalla).trim() === "") continue;
+
+        for (var j = 0; j < numFilas; j++) {
+          if (!datos[j]) continue;
+          var idCant = datos[j][columnaCantidades - 1];
+
+          if (idCant && String(idTalla).trim() === String(idCant).trim()) {
+            var concatenado = [];
+
+            for (var k = 0; k < numColumnas; k++) {
+              if (k !== columnaTallas - 1 && k !== columnaCantidades - 1) {
+                var talla = datos[i][k];
+                var cantidad = datos[j][k];
+
+                if (talla && cantidad && String(cantidad).trim() !== "0" && String(cantidad).trim() !== "0.0") {
+                  concatenado.push(String(talla).trim() + "/" + String(cantidad).trim());
+                }
+              }
+            }
+            resultados[j] = resultados[j] || [];
+            resultados[j][columnaResultados - 1] = concatenado.join(", ");
+          }
+        }
+      }
+
+      for (var i = 0; i < numFilas; i++) {
+        if (!datos[i]) datos[i] = [];
+        while (datos[i].length < columnaResultados) datos[i].push("");
+        if (resultados[i] && resultados[i][columnaResultados - 1] !== undefined) {
+          datos[i][columnaResultados - 1] = resultados[i][columnaResultados - 1];
+        }
+      }
+      return datos;
+    }
+
+    function extractColumns(hojaMatriz) {
+      var numFilas = hojaMatriz.length;
+      if (numFilas === 0) return [];
+
+      var idxB = 1, idxF = 5, idxM = 12, idxR = 17, idxU = 20, idxBE = 56;
+      var resultado = [];
+      var descActual = "Sin categoría";
+      var regex = /^[A-Z]\d{3}-\d{4}-\d$/;
+
+      for (var i = numFilas - 1; i >= 0; i--) {
+        if (!hojaMatriz[i]) continue;
+
+        var valB = hojaMatriz[i][idxB];
+        if (valB) descActual = String(valB).trim();
+
+        var datoF = String(hojaMatriz[i][idxF] || "").trim();
+
+        if (regex.test(datoF)) {
+          var numExtraido = datoF.replace(/^[A-Z]/, "").replace(/-/g, "").slice(0, -1);
+          var calidadExtraida = datoF.slice(-1);
+
+          resultado.unshift({
+            articulo: numExtraido,
+            stock: parseInt(hojaMatriz[i][idxR]) || 0,
+            pPlanilla: parseFloat(hojaMatriz[i][idxM]) || 0,
+            vtaAcc: parseInt(hojaMatriz[i][idxU]) || 0,
+            tallaCantidad: hojaMatriz[i][idxBE] || "",
+            categoria: descActual,
+            calidad: calidadExtraida
+          });
+        }
+      }
+      return resultado;
+    }
+
+    // CARGAR EXCEL
+    document.getElementById('excelInput').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        var data = new Uint8Array(evt.target.result);
+        var wb = XLSX.read(data, { type: 'array' });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+
+        var matriz = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+        var matrizProcesada = concatenarTallasSheet1(matriz);
+        globalDatabase = extractColumns(matrizProcesada);
+
+        var pill = document.getElementById('dbStatusPill');
+        pill.className = "badge-status ready";
+        pill.textContent = globalDatabase.length + " Cargados";
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // BÚSQUEDA DE OTRAS SERIES (MISMO MODELO / DIVERGENCIA EN 1.ER DÍGITO)
+    function findSeriesProducts(targetItem) {
+      if (!targetItem || !targetItem.articulo || targetItem.articulo.length !== 7) return [];
+
+      var targetCode = targetItem.articulo;
+      var last6Target = targetCode.substring(1);
+      var matches = [];
+
+      for (var i = 0; i < globalDatabase.length; i++) {
+        var item = globalDatabase[i];
+        if (item.articulo === targetCode) continue;
+
+        if (item.articulo.length === 7 && item.articulo.substring(1) === last6Target) {
+          matches.push(item);
+        }
+      }
+      return matches;
+    }
+
+    // BÚSQUEDA DE MODELOS SIMILARES / VARIANTES DE COLOR (APPSHEET - DIVERGENCIA EN 4.º DÍGITO)
+    function findSimilarProducts(targetItem, maxResults = 3) {
+      if (!targetItem || !targetItem.articulo || targetItem.articulo.length < 5) return [];
+
+      var targetCode = targetItem.articulo;
+      var targetCat = targetItem.categoria;
+
+      var left3Target = targetCode.substring(0, 3);
+      var rightRestTarget = targetCode.substring(4);
+      var mid4Target = targetCode.charAt(3);
+
+      var matches = [];
+
+      for (var i = 0; i < globalDatabase.length; i++) {
+        var item = globalDatabase[i];
+        if (item.articulo === targetCode) continue;
+
+        if (item.categoria === targetCat && item.articulo.length === targetCode.length) {
+          var left3 = item.articulo.substring(0, 3);
+          var rightRest = item.articulo.substring(4);
+          var mid4 = item.articulo.charAt(3);
+
+          if (left3 === left3Target && rightRest === rightRestTarget && mid4 !== mid4Target) {
+            matches.push(item);
+            if (matches.length >= maxResults) break;
+          }
+        }
+      }
+      return matches;
+    }
+
+    // RECONOCIMIENTO POR VOZ INTELIGENTE
+    function startVoiceRecognition() {
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Tu navegador no soporta búsqueda por voz.");
+        return;
+      }
+
+      var recognition = new SpeechRecognition();
+      recognition.lang = 'es-PE';
+      recognition.interimResults = false;
+
+      var micBtn = document.getElementById('btnMic');
+      micBtn.classList.add('listening');
+
+      recognition.start();
+
+      recognition.onresult = function(event) {
+        var voiceText = event.results[0][0].transcript;
+        micBtn.classList.remove('listening');
+        
+        var cleanCode = normalizeCode(voiceText);
+        document.getElementById('searchInput').value = cleanCode;
+        autoSearch();
+      };
+
+      recognition.onerror = function() { micBtn.classList.remove('listening'); };
+      recognition.onend = function() { micBtn.classList.remove('listening'); };
+    }
+
+    // BÚSQUEDA REACTIVA EN BUSCADOR
+    function autoSearch(queryOverride) {
+      var rawQuery = queryOverride || document.getElementById('searchInput').value;
+      var query = normalizeCode(rawQuery);
+
+      if (queryOverride) {
+        document.getElementById('searchInput').value = query;
+      }
+
+      if (!query) {
+        document.getElementById('productResult').style.display = 'none';
+        document.getElementById('emptySearchState').style.display = 'block';
+        return;
+      }
+
+      var found = globalDatabase.find(item => item.articulo === query);
+
+      if (found) {
+        document.getElementById('productResult').style.display = 'block';
+        document.getElementById('emptySearchState').style.display = 'none';
+
+        document.getElementById('pCode').textContent = 'Artículo ' + found.articulo;
+
+        var stockElem = document.getElementById('pStock');
+        stockElem.textContent = found.stock;
+        if(found.stock <= 2) stockElem.style.color = 'var(--primary)';
+        else if(found.stock <= 5) stockElem.style.color = 'var(--warning)';
+        else stockElem.style.color = 'var(--accent)';
+
+        document.getElementById('pPrice').textContent = 'S/ ' + found.pPlanilla.toFixed(2);
+        document.getElementById('pSales').textContent = found.vtaAcc;
+        document.getElementById('pCategory').textContent = found.categoria;
+        document.getElementById('pQuality').textContent = 'CALIDAD ' + found.calidad;
+
+        document.getElementById('pImg').src = buildImageUrl(found.articulo);
+
+        var sizesDiv = document.getElementById('pSizesContainer');
+        sizesDiv.innerHTML = '';
+        if (found.tallaCantidad) {
+          found.tallaCantidad.split(',').forEach(tc => {
+            var parts = tc.trim().split('/');
+            var chip = document.createElement('div');
+            chip.className = 'size-chip';
+            chip.innerHTML = `Talla ${parts[0]} <span>${parts[1]} pz</span>`;
+            sizesDiv.appendChild(chip);
+          });
+        } else {
+          sizesDiv.innerHTML = '<span style="color:var(--text-muted); font-size:0.8rem;">Sin desglose</span>';
+        }
+
+        // RENDERIZAR OTRAS SERIES (CON TALLA / CANTIDAD IGUAL A LAS VARIANTES)
+        var seriesList = findSeriesProducts(found);
+        var seriesWrapper = document.getElementById('seriesWrapper');
+        var seriesContainer = document.getElementById('seriesContainer');
+
+        if (seriesList.length > 0) {
+          seriesWrapper.style.display = 'block';
+          seriesContainer.innerHTML = '';
+
+          seriesList.forEach(sItem => {
+            var card = document.createElement('div');
+            card.className = 'item-card';
+            card.onclick = function() { autoSearch(sItem.articulo); };
+
+            card.innerHTML = `
+              <div class="item-img-box">
+                <img src="${buildImageUrl(sItem.articulo)}" onerror="this.src='https://via.placeholder.com/55?text=N/A';">
+              </div>
+              <div class="item-info">
+                <div class="item-code">${sItem.articulo}</div>
+                <div class="item-price">S/ ${sItem.pPlanilla.toFixed(2)}</div>
+                <div class="item-subtext"><i class="fa-solid fa-boxes-stacked"></i> ${sItem.tallaCantidad || 'Sin stock'}</div>
+              </div>
+            `;
+            seriesContainer.appendChild(card);
+          });
+        } else {
+          seriesWrapper.style.display = 'none';
+        }
+
+        // RENDERIZAR MODELOS SIMILARES / VARIANTES DE COLOR
+        var similars = findSimilarProducts(found, 3);
+        var suggWrapper = document.getElementById('suggestionsWrapper');
+        var suggContainer = document.getElementById('suggestionsContainer');
+
+        if (similars.length > 0) {
+          suggWrapper.style.display = 'block';
+          suggContainer.innerHTML = '';
+
+          similars.forEach(sim => {
+            var card = document.createElement('div');
+            card.className = 'item-card';
+            card.onclick = function() { autoSearch(sim.articulo); };
+
+            card.innerHTML = `
+              <div class="item-img-box">
+                <img src="${buildImageUrl(sim.articulo)}" onerror="this.src='https://via.placeholder.com/55?text=N/A';">
+              </div>
+              <div class="item-info">
+                <div class="item-code">${sim.articulo}</div>
+                <div class="item-price">S/ ${sim.pPlanilla.toFixed(2)}</div>
+                <div class="item-subtext"><i class="fa-solid fa-boxes-stacked"></i> ${sim.tallaCantidad || 'Sin stock'}</div>
+              </div>
+            `;
+            suggContainer.appendChild(card);
+          });
+        } else {
+          suggWrapper.style.display = 'none';
+        }
+      }
+    }
+
+    // BUSCADOR INTELIGENTE EN TABLA PLANILLA
+    function filterTableSmart() {
+      var input = document.getElementById('tableFilter').value.trim().toLowerCase();
+      if (!input) {
+        renderFullTable(globalDatabase);
+        return;
+      }
+
+      var filtered = globalDatabase.filter(item => {
+        // 1. Filtros avanzados de stock (stock>5, stock<3, stock=10)
+        if (input.startsWith('stock')) {
+          var expr = input.replace('stock', '').trim();
+          if (expr.startsWith('>')) return item.stock > parseFloat(expr.substring(1));
+          if (expr.startsWith('<')) return item.stock < parseFloat(expr.substring(1));
+          if (expr.startsWith('=')) return item.stock === parseFloat(expr.substring(1));
+        }
+
+        // 2. Filtros de Precio (precio<100, precio>50)
+        if (input.startsWith('precio')) {
+          var expr = input.replace('precio', '').trim();
+          if (expr.startsWith('>')) return item.pPlanilla > parseFloat(expr.substring(1));
+          if (expr.startsWith('<')) return item.pPlanilla < parseFloat(expr.substring(1));
+        }
+
+        // 3. Búsqueda por Talla (talla:41)
+        if (input.startsWith('talla:')) {
+          var sizeTarget = input.replace('talla:', '').trim();
+          return item.tallaCantidad.toLowerCase().includes(sizeTarget + '/');
+        }
+
+        // 4. Búsqueda por texto general
+        var matchArt = item.articulo.toLowerCase().includes(input);
+        var matchCat = item.categoria.toLowerCase().includes(input);
+        var matchTalla = item.tallaCantidad.toLowerCase().includes(input + '/');
+
+        return matchArt || matchCat || matchTalla;
+      });
+
+      renderFullTable(filtered);
+    }
+
+    function renderFullTable(data) {
+      var tbody = document.querySelector('#fullTable tbody');
+      tbody.innerHTML = '';
+
+      data.forEach(item => {
+        var tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><img src="${buildImageUrl(item.articulo)}" class="img-thumb" onerror="this.src='https://via.placeholder.com/40?text=N/A'"></td>
+          <td><strong>${item.articulo}</strong></td>
+          <td>${item.stock}</td>
+          <td>S/ ${item.pPlanilla.toFixed(2)}</td>
+          <td><small style="font-weight:700;">${item.tallaCantidad || '-'}</small></td>
+          <td>${item.categoria}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ESCÁNER QR Y CÓDIGO DE BARRAS EAN13
+    function openScanner() {
+      document.getElementById('scannerModal').style.display = 'flex';
+      html5QrcodeScanner = new Html5Qrcode("reader");
+      
+      html5QrcodeScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        function(decodedText) {
+          if (navigator.vibrate) navigator.vibrate(100);
+          closeScanner();
+          switchTab('buscador');
+          autoSearch(decodedText);
+        },
+        function(error) {}
+      ).catch(err => {
+        alert('Por favor autoriza el uso de la cámara.');
+        closeScanner();
+      });
+    }
+
+    function closeScanner() {
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+          document.getElementById('scannerModal').style.display = 'none';
+        }).catch(() => {
+          document.getElementById('scannerModal').style.display = 'none';
+        });
+      } else {
+        document.getElementById('scannerModal').style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
